@@ -90,4 +90,9 @@ Filtros Dinámicos: Al filtrar un proyecto en el sidebar, todos los cálculos de
 3. Interfaz de Usuario (UX/UI)
 Se ha implementado un diseño Dark Mode personalizado mediante inyección de CSS, optimizando la legibilidad para entornos de desarrollo y reduciendo la fatiga visual.
 
+## Ejemplos:
+![This is an alt text.](/image/captura1.png "Captura, como se veran los graficos, con datos.")
+![This is an alt text.](/image/captura2.png "Captura, como se veran los graficos, con datos.")
+![This is an alt text.](/image/captura3.png "Captura, como se veran los graficos, con datos.")
+
 Desarrollado por Nicolás Andrés Cano Leal LiveOps & BizOps | Python Backend Developer | Data Automation
