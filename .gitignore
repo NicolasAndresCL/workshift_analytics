@@ -1,0 +1,63 @@
+# ======================================
+# ENTORNOS VIRTUALES (Virtual Environments)
+# ======================================
+venv/
+env/
+ENV/
+.env
+.venv
+bin/
+include/
+lib/
+share/
+pyvenv.cfg
+
+# ======================================
+# BASE DE DATOS (Local Data)
+# ======================================
+# Ignoramos la base de datos para que tus registros 
+# personales no se suban al repositorio público.
+*.db
+*.sqlite3
+
+# ======================================
+# PYTHON (Byte-compiled / optimized)
+# ======================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ======================================
+# STREAMLIT & IDEs
+# ======================================
+.streamlit/config.toml
+.streamlit/secrets.toml
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ======================================
+# LOGS
+# ======================================
+*.log
