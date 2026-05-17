@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import sqlite3
-import os
 from datetime import datetime, timedelta
 
 # ======================================
@@ -61,11 +60,9 @@ class WorkshiftManager:
             )
 
     def load_all(self):
-        if not os.path.exists(self.db_path):
-            return pd.DataFrame()
         with self._get_connection() as conn:
             df = pd.read_sql("SELECT * FROM Registro", conn)
-        
+
         if not df.empty:
             df["Fecha"] = pd.to_datetime(df["Fecha"])
             df["Duracion"] = pd.to_timedelta(df["Duracion"])
@@ -73,12 +70,27 @@ class WorkshiftManager:
         return df
 
     def delete_records(self, ids):
-        if not ids: return
+        if not ids:
+            return
+        placeholders = ",".join("?" * len(ids))
         with self._get_connection() as conn:
-            conn.executemany("DELETE FROM Registro WHERE id=?", [(int(i),) for i in ids])
+            conn.execute(
+                f"DELETE FROM Registro WHERE id IN ({placeholders})",
+                [int(i) for i in ids]
+            )
 
-# Instancia del controlador
-api = WorkshiftManager()
+# ======================================
+# INSTANCIA Y CACHÉ
+# ======================================
+@st.cache_resource
+def get_manager():
+    return WorkshiftManager()
+
+api = get_manager()
+
+@st.cache_data(ttl=30)
+def load_data():
+    return api.load_all()
 
 # ======================================
 # SIDEBAR: ENTRADA DE DATOS
@@ -89,25 +101,28 @@ with st.sidebar.form("nueva_actividad", clear_on_submit=True):
     f_input = st.date_input("Fecha", datetime.now())
     p_input = st.text_input("Proyecto", placeholder="Ej: PedidosYa BizOps")
     t_input = st.text_input("Tarea", placeholder="Ej: Automatización Python")
-    
+
     col_h, col_m = st.columns(2)
     h_val = col_h.number_input("Horas", 0, 24, 1)
     m_val = col_m.number_input("Minutos", 0, 59, 0)
-    
+
     if st.form_submit_button("Guardar Registro", type="primary"):
-        if p_input and t_input:
+        if not p_input or not t_input:
+            st.error("Por favor completa Proyecto y Tarea.")
+        elif h_val == 0 and m_val == 0:
+            st.error("La duración no puede ser 0 horas y 0 minutos.")
+        else:
             duracion_td = timedelta(hours=h_val, minutes=m_val)
             api.save_entry(f_input, p_input, t_input, duracion_td)
+            load_data.clear()
             st.toast("✅ Registro exitoso", icon="🚀")
             st.rerun()
-        else:
-            st.error("Por favor completa Proyecto y Tarea.")
 
 # ======================================
 # CUERPO PRINCIPAL
 # ======================================
 st.title("📊 Workshift Analytics")
-df_master = api.load_all()
+df_master = load_data()
 
 if df_master.empty:
     st.info("Aún no hay datos registrados. Comienza agregando una actividad en el panel izquierdo.")
@@ -125,7 +140,7 @@ else:
         m1.metric("Tareas Totales", len(df))
         m2.metric("Proyectos Activos", df["Proyecto"].nunique())
         m3.metric("Horas Acumuladas", f"{df['Horas'].sum():.1f}h")
-        
+
         # Lógica de Racha (Continuidad de días)
         fechas_log = sorted(df_master["Fecha"].dt.date.unique(), reverse=True)
         racha_cont = 0
@@ -134,7 +149,8 @@ else:
             if f == current_check or f == current_check - timedelta(days=1):
                 racha_cont += 1
                 current_check = f
-            else: break
+            else:
+                break
         m4.metric("Racha Actual", f"{racha_cont} Días", delta="🔥")
 
         st.divider()
@@ -171,27 +187,28 @@ else:
 
         with row2_col2:
             st.subheader("4. Productividad Semanal")
-            df['Semana'] = df['Fecha'].dt.isocalendar().week
-            df_sem = df.groupby('Semana')['Horas'].sum().reset_index()
+            df_sem = df.copy()
+            df_sem['Semana'] = df_sem['Fecha'].dt.isocalendar().week
+            df_sem = df_sem.groupby('Semana')['Horas'].sum().reset_index()
             df_sem['Semana'] = df_sem['Semana'].apply(lambda x: f"Sem {x}")
             fig4 = px.bar(df_sem, x="Semana", y="Horas",
                           color_discrete_sequence=["#c586c0"],
-                                template="plotly_dark")
+                          template="plotly_dark")
             fig4.update_layout(height=300)
             st.plotly_chart(fig4, use_container_width=True)
 
     with tab_data:
         st.subheader("🗄 Explorador de Registros")
         st.markdown("Selecciona los registros que desees eliminar permanentemente.")
-        
+
         df_crud = df.copy()
         df_crud.insert(0, "Eliminar", False)
-        
+
         # Editor de datos optimizado
         response = st.data_editor(
             df_crud,
             column_config={
-                "id": None, # Ocultamos el ID para limpieza visual
+                "id": None,
                 "Eliminar": st.column_config.CheckboxColumn("Borrar", default=False),
                 "Horas": st.column_config.NumberColumn(format="%.2f h"),
                 "Fecha": st.column_config.DateColumn("Fecha"),
@@ -204,9 +221,10 @@ else:
         )
 
         if st.button("🗑️ Eliminar seleccionados", type="secondary"):
-            ids_to_del = response[response["Eliminar"] == True]["id"].tolist()
+            ids_to_del = response[response["Eliminar"]]["id"].tolist()
             if ids_to_del:
                 api.delete_records(ids_to_del)
+                load_data.clear()
                 st.success(f"Se han eliminado {len(ids_to_del)} registros.")
                 st.rerun()
             else:
