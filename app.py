@@ -85,6 +85,15 @@ api = get_manager()
 def load_data():
     return api.load_all()
 
+# Carga temprana para alimentar sugerencias del sidebar
+df_master = load_data()
+
+# Aplicar reset de duración antes de renderizar los widgets
+if st.session_state.get("_reset_duracion"):
+    st.session_state["reg_horas"] = 1
+    st.session_state["reg_minutos"] = 0
+    st.session_state["_reset_duracion"] = False
+
 # ======================================
 # SIDEBAR
 # ======================================
@@ -94,27 +103,49 @@ st.sidebar.title("⚙️ Configuración")
 st.sidebar.caption("Cambia el tema desde el menú ≡ → Settings")
 st.sidebar.divider()
 
-with st.sidebar.form("nueva_actividad", clear_on_submit=True):
-    st.subheader("➕ Registrar Actividad")
-    f_input = st.date_input("Fecha", datetime.now())
-    p_input = st.text_input("Proyecto", placeholder="Ej: PedidosYa BizOps")
-    t_input = st.text_input("Tarea", placeholder="Ej: Automatización Python")
+st.sidebar.subheader("➕ Registrar Actividad")
 
-    col_h, col_m = st.columns(2)
-    h_val = col_h.number_input("Horas", 0, 24, 1)
-    m_val = col_m.number_input("Minutos", 0, 59, 0)
+f_input = st.sidebar.date_input("Fecha", datetime.now(), key="reg_fecha")
 
-    if st.form_submit_button("Guardar Registro", type="primary"):
-        if not p_input or not t_input:
-            st.error("Por favor completa Proyecto y Tarea.")
-        elif h_val == 0 and m_val == 0:
-            st.error("La duración no puede ser 0 horas y 0 minutos.")
-        else:
-            duracion_td = timedelta(hours=h_val, minutes=m_val)
-            api.save_entry(f_input, p_input, t_input, duracion_td)
-            load_data.clear()
-            st.toast("✅ Registro exitoso", icon="🚀")
-            st.rerun()
+# --- Proyecto ---
+proyectos_existentes = sorted(df_master["Proyecto"].unique().tolist()) if not df_master.empty else []
+p_sel = st.sidebar.selectbox("Proyecto", proyectos_existentes + ["➕ Nuevo proyecto..."], key="reg_proyecto_sel")
+
+if p_sel == "➕ Nuevo proyecto...":
+    p_input = st.sidebar.text_input("Nombre del proyecto", placeholder="Ej: PedidosYa BizOps", key="reg_proyecto_nuevo")
+else:
+    p_input = p_sel
+
+# --- Tarea (filtrada por proyecto seleccionado) ---
+tareas_existentes = (
+    sorted(df_master[df_master["Proyecto"] == p_sel]["Tarea"].unique().tolist())
+    if not df_master.empty and p_sel != "➕ Nuevo proyecto..."
+    else []
+)
+t_sel = st.sidebar.selectbox("Tarea", tareas_existentes + ["➕ Nueva tarea..."], key="reg_tarea_sel")
+
+if t_sel == "➕ Nueva tarea...":
+    t_input = st.sidebar.text_input("Nombre de la tarea", placeholder="Ej: Automatización Python", key="reg_tarea_nueva")
+else:
+    t_input = t_sel
+
+# --- Duración ---
+col_h, col_m = st.sidebar.columns(2)
+h_val = col_h.number_input("Horas", 0, 24, 1, key="reg_horas")
+m_val = col_m.number_input("Minutos", 0, 59, 0, key="reg_minutos")
+
+if st.sidebar.button("Guardar Registro", type="primary", use_container_width=True):
+    if not p_input.strip() or not t_input.strip():
+        st.sidebar.error("Completa Proyecto y Tarea.")
+    elif h_val == 0 and m_val == 0:
+        st.sidebar.error("La duración no puede ser 0.")
+    else:
+        duracion_td = timedelta(hours=h_val, minutes=m_val)
+        api.save_entry(f_input, p_input, t_input, duracion_td)
+        load_data.clear()
+        st.session_state["_reset_duracion"] = True
+        st.toast("✅ Registro exitoso", icon="🚀")
+        st.rerun()
 
 # ======================================
 # CUERPO PRINCIPAL
@@ -122,8 +153,6 @@ with st.sidebar.form("nueva_actividad", clear_on_submit=True):
 st.title("📊 Workshift Analytics")
 st.caption("Seguimiento de actividades y productividad por proyecto")
 st.divider()
-
-df_master = load_data()
 
 if df_master.empty:
     st.info("Aún no hay datos registrados. Comienza agregando una actividad en el panel izquierdo.")
@@ -138,7 +167,7 @@ else:
     with tab_dash:
         # MÉTRICAS CLAVE
         with st.container(border=True):
-            m1, m2, m3, m4 = st.columns(4)
+            m1, m2, m3, m4, m5, m6 = st.columns(6)
 
             m1.metric("Tareas Totales", len(df))
             m2.metric("Proyectos Activos", df["Proyecto"].nunique())
@@ -154,6 +183,14 @@ else:
                 else:
                     break
             m4.metric("Racha Actual", f"{racha_cont} días", delta="🔥 activa" if racha_cont > 0 else None)
+
+            dias_unicos = df["Fecha"].dt.date.nunique()
+            prom_diario = df["Horas"].sum() / dias_unicos if dias_unicos > 0 else 0
+            m5.metric("Promedio Diario", f"{prom_diario:.1f} h")
+
+            semanas_unicas = df["Fecha"].dt.strftime("%G-%V").nunique()
+            prom_semanal = df["Horas"].sum() / semanas_unicas if semanas_unicas > 0 else 0
+            m6.metric("Promedio Semanal", f"{prom_semanal:.1f} h")
 
         st.divider()
 
@@ -203,6 +240,36 @@ else:
                 fig4.update_layout(height=300)
                 st.plotly_chart(fig4, use_container_width=True)
 
+        row3_col1, row3_col2 = st.columns(2)
+
+        with row3_col1:
+            with st.container(border=True):
+                st.subheader("Actividad por Día de la Semana")
+                dias_orden = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                dias_es = {"Monday": "Lunes", "Tuesday": "Martes", "Wednesday": "Miércoles",
+                           "Thursday": "Jueves", "Friday": "Viernes", "Saturday": "Sábado", "Sunday": "Domingo"}
+                df_dow = df.copy()
+                df_dow["DiaSemana"] = df_dow["Fecha"].dt.day_name()
+                df_dow = df_dow.groupby("DiaSemana")["Horas"].sum().reindex(dias_orden).fillna(0).reset_index()
+                df_dow["DiaSemana"] = df_dow["DiaSemana"].map(dias_es)
+                fig5 = px.bar(df_dow, x="DiaSemana", y="Horas",
+                              color="Horas", color_continuous_scale="Teal",
+                              template=plotly_template)
+                fig5.update_layout(height=300, showlegend=False, xaxis_title=None)
+                st.plotly_chart(fig5, use_container_width=True)
+
+        with row3_col2:
+            with st.container(border=True):
+                st.subheader("Progreso Acumulado")
+                df_cum = df.groupby(df["Fecha"].dt.date)["Horas"].sum().cumsum().reset_index()
+                df_cum.columns = ["Fecha", "Horas Acumuladas"]
+                fig6 = px.line(df_cum, x="Fecha", y="Horas Acumuladas",
+                               color_discrete_sequence=["#2ecc71"],
+                               template=plotly_template)
+                fig6.update_traces(fill="tozeroy", fillcolor="rgba(46,204,113,0.15)")
+                fig6.update_layout(height=300)
+                st.plotly_chart(fig6, use_container_width=True)
+
     with tab_data:
         with st.container(border=True):
             st.subheader("🗄 Explorador de Registros")
@@ -218,9 +285,9 @@ else:
                     "Eliminar": st.column_config.CheckboxColumn("Borrar", default=False),
                     "Horas": st.column_config.NumberColumn(format="%.2f h"),
                     "Fecha": st.column_config.DateColumn("Fecha"),
-                    "Duracion": st.column_config.TextColumn("Duración Raw"),
+                    "Duracion": None,
                 },
-                disabled=["id", "Fecha", "Proyecto", "Tarea", "Duracion", "Horas"],
+                disabled=["Fecha", "Proyecto", "Tarea", "Horas"],
                 hide_index=True,
                 use_container_width=True,
                 key="data_editor_main"
@@ -238,4 +305,4 @@ else:
 
 # Footer
 st.sidebar.divider()
-st.sidebar.caption("Nicolás Cano · Workshift Analytics v2.3")
+st.sidebar.caption("Nicolás Cano · Workshift Analytics v2.4")

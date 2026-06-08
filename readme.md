@@ -1,98 +1,92 @@
 # 📊 Workshift Analytics Pro
-Workshift Analytics es una aplicación de escritorio basada en web desarrollada con Python y Streamlit. Está diseñada para profesionales de Operaciones (BizOps) y desarrolladores que necesitan un seguimiento granular de su productividad, permitiendo visualizar la distribución del tiempo entre múltiples proyectos y tareas técnicas.
------------------------------------
-## 🚀 Características Principales
-- Registro Inteligente: Interfaz rápida para ingresar horas y minutos dedicados a proyectos específicos.
 
-- Visualización 360°: Dashboard dinámico con 4 tipos de gráficos:
+Aplicación de escritorio basada en web desarrollada con Python y Streamlit. Diseñada para profesionales de Operaciones (BizOps) y desarrolladores que necesitan seguimiento granular de productividad, permitiendo visualizar la distribución del tiempo entre múltiples proyectos y tareas.
 
-- Sunburst Chart: Análisis jerárquico de Proyecto > Tarea.
+---
 
-- Bar Chart: Comparativa de carga horaria por proyecto.
+## 🚀 Características
 
-- Area Chart: Tendencia de intensidad de trabajo diaria.
+**Registro inteligente**
+- Selectbox con autocompletado: proyectos y tareas se sugieren desde el historial existente.
+- Las tareas se filtran automáticamente según el proyecto seleccionado.
+- Opción "➕ Nuevo..." para crear proyectos y tareas nuevas sin salir del flujo.
 
-- Weekly Chart: Productividad acumulada por semana.
+**Dashboard de métricas (6 indicadores)**
+- Tareas Totales · Proyectos Activos · Horas Acumuladas · Racha Actual
+- Promedio Diario · Promedio Semanal
 
-- Sistema de Racha (Streak): Gamificación de la productividad mediante el conteo de días consecutivos de actividad.
+**Visualización 360° (6 gráficos)**
+- Sunburst: jerarquía Proyecto → Tarea
+- Bar horizontal: esfuerzo acumulado por proyecto
+- Area: intensidad de trabajo diaria
+- Bar: productividad semanal
+- Bar por día de la semana: patrón de actividad Lun–Dom
+- Línea acumulada: progreso total de horas a lo largo del tiempo
 
-- Gestión de Datos CRUD: Editor de datos integrado para modificar o eliminar registros de forma masiva.
+**Gestión de datos**
+- Editor de tabla con eliminación masiva por checkbox.
+- Filtro global por proyecto que afecta todas las métricas y gráficos en tiempo real.
 
-- Persistencia Robusta: Almacenamiento local mediante SQLite con gestión automática de conexiones.
+**Tema adaptativo**
+- Soporta dark y light mode nativo de Streamlit. Cambiable desde `≡ → Settings`.
 
-## 🛠️ Stack Tecnológico
+---
 
-- Lenguaje: Python 3.10+
+## 🛠️ Stack tecnológico
 
-- Interfaz: Streamlit
+| Capa | Tecnología |
+|---|---|
+| Lenguaje | Python 3.10+ |
+| Interfaz | Streamlit 1.55 |
+| Gráficos | Plotly Express |
+| Base de datos | SQLite3 |
+| Procesamiento | Pandas |
+| Assets | Pillow |
 
-- Gráficos: Plotly Express
+---
 
-- Base de Datos: SQLite3
+## 💻 Instalación y uso
 
-- Procesamiento de Datos: Pandas
-
-## 📋 Requisitos Previos
-Asegúrate de tener instaladas las dependencias necesarias:
-```
-Bash
-pip install streamlit pandas plotly
-```
-💻 Instalación y Uso
-
-Clonar el repositorio:
-```
-Bash
+```bash
+# Clonar el repositorio
 git clone https://github.com/tu-usuario/workshift-analytics.git
 cd workshift-analytics
+
+# Crear entorno virtual e instalar dependencias
+python -m venv env
+env\Scripts\activate
+pip install -r requirements.txt
+
+# Ejecutar
+streamlit run app.py
 ```
 
-Ejecutar la aplicación:
-```
-Bash
-streamlit run main.py
-```
-Acceso:
-La aplicación se abrirá automáticamente en tu navegador predeterminado en http://localhost:8501.
+La app se abre automáticamente en `http://localhost:8501`.
 
+**Inicio rápido en Windows:** doble clic en `run_app.bat` — activa el entorno e inicia Streamlit en un solo paso. Se puede crear un acceso directo en el escritorio apuntando al `.bat`.
 
-## 📥 Automatización de Inicio (Windows)
-Para facilitar el acceso diario, el proyecto incluye un script de automatización .bat. Esto permite ejecutar la aplicación como si fuera un programa nativo de Windows con un solo clic.
+---
 
-- Configuración del Acceso Directo:
-Localiza el archivo run_app.bat en la carpeta raíz del proyecto.
+## 📖 Arquitectura
 
-- Haz clic derecho sobre él y selecciona "Enviar a" > "Escritorio (crear acceso directo)".
+**Data Layer — `WorkshiftManager`**
+Clase que encapsula todas las operaciones SQLite. `Duracion` se guarda como string de `timedelta`; la columna `Horas` (float) se deriva al cargar y no se persiste en la DB.
 
-- (Opcional) Cambia el nombre del acceso directo a "Workshift Analytics" y cámbiale el icono por uno de gráfico de barras en las propiedades.
+**Caché**
+- `@st.cache_resource`: instancia singleton del manager.
+- `@st.cache_data(ttl=30)`: datos del DataFrame. Se invalida con `load_data.clear()` tras cada escritura o borrado.
 
-Cómo funciona el .bat:
+**Migración de esquema**
+`import.py` es un script puntual para reconstruir la tabla `Registro` si el esquema cambió. Ejecutar manualmente solo cuando sea necesario.
 
-- El script realiza las siguientes acciones automáticamente:
+---
 
-- Verifica el entorno de Python.
+## 📥 Automatización de inicio (Windows)
 
-- Activa las librerías necesarias.
+1. Localizar `run_app.bat` en la raíz del proyecto.
+2. Clic derecho → "Enviar a" → "Escritorio (crear acceso directo)".
+3. (Opcional) Renombrar el acceso directo y cambiar el ícono en Propiedades.
 
-- Lanza el servidor de Streamlit en segundo plano.
+---
 
-- Abre tu navegador predeterminado en la dirección del Dashboard.
-
-## 📖 Cómo funciona el programa
-1. Capa de Datos (Persistence Layer)
-El programa utiliza una clase controladora llamada WorkshiftManager que encapsula todas las operaciones SQL. Esto garantiza que la lógica de la base de datos esté separada de la interfaz de usuario (siguiendo principios de Clean Architecture).
-
-2. Dashboard y Lógica de Negocio
-Cálculo de Horas: El sistema transforma automáticamente los objetos timedelta de Python en valores flotantes de horas para permitir cálculos matemáticos precisos en los gráficos.
-
-Filtros Dinámicos: Al filtrar un proyecto en el sidebar, todos los cálculos de métricas y gráficos se recalculan en tiempo real gracias al estado de sesión de Streamlit.
-
-3. Interfaz de Usuario (UX/UI)
-Se ha implementado un diseño Dark Mode personalizado mediante inyección de CSS, optimizando la legibilidad para entornos de desarrollo y reduciendo la fatiga visual.
-
-## Ejemplos:
-![This is an alt text.](/image/captura1.png "Captura, como se veran los graficos, con datos.")
-![This is an alt text.](/image/captura2.png "Captura, como se veran los graficos, con datos.")
-![This is an alt text.](/image/captura3.png "Captura, como se veran los graficos, con datos.")
-
-Desarrollado por Nicolás Andrés Cano Leal LiveOps & BizOps | Python Backend Developer | Data Automation
+Desarrollado por **Nicolás Andrés Cano Leal** · LiveOps & BizOps | Python Backend Developer | Data Automation
